@@ -1,9 +1,9 @@
 module Main exposing (..)
 
-import Html exposing (Html, div, text, button)
+import Html exposing (Html, div, text, button, h2)
 import Html.Attributes exposing (style)
 import Html.Events exposing (onClick)
-import String exposing (fromChar, fromList, toList)
+import String exposing (fromChar, fromList, toList, repeat, length)
 import List exposing (map, map2, member, head, drop)
 import Keypad exposing (..)
 
@@ -19,17 +19,17 @@ type GameState
 
 type alias Model =
   { gameState: GameState
-  , word: String
-  , answer: String
+  , word: List Char
+  , answer: List Char
   , attempts: Int
-  , pressedKeys: List (Char)
+  , pressedKeys: List Char
   }
 
 init: (Model, Cmd Msg)
 init = (
     { gameState = Welcome
-    , word = ""
-    , answer = ""
+    , word = []
+    , answer = []
     , attempts = 0
     , pressedKeys = []
     }, Cmd.none)
@@ -40,53 +40,51 @@ view model =
   case model.gameState of
     Welcome ->
       div []
-        [ div [] [ text "Hangman Game"]
+        [ h2 [] [ text "Hangman Game"]
         , div [] [ button [ onClick StartGame ] [ text "Start new game" ] ]
         ]
 
     InProgress ->
       div []
-        [ div [] [ text ("Hangman Game") ]
+        [ h2 [] [ text ("Hangman Game") ]
         , div [] [ text ("Number of attempts: " ++ (toString model.attempts)) ]
-        , div [style [("letter-spacing", "3px")]] [ text model.answer ]
-        , div [] [ keypad ]
+        , div [style [("letter-spacing", "3px"), ("font-size", "30px")]] [ text (fromList model.answer) ]
+        , div [] [ keypad model.word model.pressedKeys ]
         ]
 
     Finished result ->
       div []
-        [ div [style [("letter-spacing", "3px")]] [ text model.answer ]
+        [ h2 [] [ text ("Hangman Game") ]
+        , div [style [("letter-spacing", "3px")]] [ text (fromList model.answer) ]
         , div [] [ text ("You " ++ toString result)]
         , div [] [ button [ onClick StartGame ] [ text "Start new game" ] ]
+        , div [] [ keypad model.word model.pressedKeys ]
         ]
 
 -- UPDATE
 update: Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
-    KeyPressed letter ->
+    ValidKeyPressed key ->
       let
-        correctAnswer = member letter (toList model.word)
+        newAnswer = combineAnswer key model.word model.answer
       in
-        if (correctAnswer)
-        then
-          let
-            newAnswer = combineAnswer letter model.word model.answer
-          in
-            ({model |
-              answer = newAnswer,
-              pressedKeys = letter :: model.pressedKeys,
-              gameState = if (newAnswer == model.word) then Finished Win else model.gameState
-            }, Cmd.none)
-        else
-          ({ model |
-            attempts = model.attempts - 1,
-            pressedKeys = letter :: model.pressedKeys,
-            gameState = if (model.attempts == 1) then Finished Loss else model.gameState
-          }, Cmd.none)
+        ({model |
+          answer = newAnswer,
+          pressedKeys = key :: model.pressedKeys,
+          gameState = if (newAnswer == model.word) then Finished Win else model.gameState
+        }, Cmd.none)
+
+    InvalidKeyPressed key ->
+      ({ model |
+        attempts = model.attempts - 1,
+        pressedKeys = key :: model.pressedKeys,
+        gameState = if (model.attempts == 1) then Finished Loss else model.gameState
+      }, Cmd.none)
 
     StartGame ->
       let
-        newWord = "HASKELL"
+        newWord = toList "HASKELL"
       in
         ({ model |
           gameState = InProgress,
@@ -96,16 +94,11 @@ update msg model =
           pressedKeys = []
         }, Cmd.none)
 
-combineAnswer: Char -> String -> String -> String
-combineAnswer letter word answer = fromList (map2 (\w g -> if (letter == w) then w else g) (toList word) (toList answer))
+combineAnswer: Char -> List Char -> List Char -> List Char
+combineAnswer key word answer = map2 (\w a -> if (key == w) then w else a) word answer
 
-maskWord: String -> String
-maskWord word =
-  word
-    |> toList
-    |> map (\_ -> '_')
-    |> fromList
--- alternative: fromList (map (\c -> '_') (toList word))
+maskWord: List Char  -> List Char
+maskWord word = map (always '_') word
 
 -- SUBSCRIPTIONS
 subscriptions: Model -> Sub Msg
